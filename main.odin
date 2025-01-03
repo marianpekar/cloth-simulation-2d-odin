@@ -88,10 +88,28 @@ UpdateCloth :: proc(cloth: ^Cloth, deltaTime: f32, spacing: int, drag: f32, acce
     }
 }
 
-DrawCloth :: proc(cloth: ^Cloth) {
+DrawCloth :: proc(cloth: ^Cloth, spacing: int, elasticity: f32) {
     for stick in cloth.sticks {
         if (stick.isActive) {
-            rl.DrawLineV(stick.p0.pos, stick.p1.pos, {44, 222, 130, 255})
+            distance := rl.Vector2Distance(stick.p0.pos, stick.p1.pos)
+            color := GetColor(distance, elasticity, spacing)
+            rl.DrawLineV(stick.p0.pos, stick.p1.pos, color)
+        }
+    }
+
+    GetColor :: proc(distance: f32, elasticity: f32, spacing: int) -> rl.Color {
+        if distance <= f32(spacing) {
+            return {44, 222, 130, 255}  // Green
+        } else if distance <= f32(spacing) * 1.33 {
+            t := (distance - f32(spacing)) / (f32(spacing) * 0.33)
+            return {Lerp(44, 255, t), Lerp(222, 255, t), Lerp(130, 0, t), 255}  // Gradual transition to yellow
+        } else {
+            t := (distance - f32(spacing) * 1.33) / (elasticity - f32(spacing) * 1.33)
+            return {Lerp(255, 222, t), Lerp(255, 44, t), Lerp(0, 44, t), 255}  // Gradual transition to red
+        }
+
+        Lerp :: proc(a: f32, b: f32, t: f32) -> u8 {
+            return u8(a + ((b - a) * t))
         }
     }
 }
@@ -140,7 +158,7 @@ main :: proc() {
         rl.ClearBackground({33, 40, 48, 255})
         HandleMouseInteraction(&cloth, cursorSize)
         UpdateCloth(&cloth, rl.GetFrameTime(), spacing, drag, acceleration, elasticity)
-        DrawCloth(&cloth)
+        DrawCloth(&cloth, spacing, elasticity)
         rl.EndDrawing()
     }
 
