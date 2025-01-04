@@ -6,7 +6,8 @@ Point :: struct {
      pos: rl.Vector2,
      prevPos: rl.Vector2,
      initPos: rl.Vector2,
-     isPinned: bool
+     isPinned: bool,
+     isSelected: bool
 }
 
 Stick :: struct {
@@ -96,7 +97,7 @@ DrawCloth :: proc(cloth: ^Cloth, spacing: int, elasticity: f32) {
     for stick in cloth.sticks {
         if (stick.isActive) {
             distance := rl.Vector2Distance(stick.p0.pos, stick.p1.pos)
-            color := GetColor(distance, elasticity, spacing)
+            color := stick.p0.isSelected || stick.p1.isSelected ? rl.BLUE : GetColor(distance, elasticity, spacing)
             rl.DrawLineV(stick.p0.pos, stick.p1.pos, color)
         }
     }
@@ -118,27 +119,37 @@ DrawCloth :: proc(cloth: ^Cloth, spacing: int, elasticity: f32) {
     }
 }
 
-HandleMouseInteraction :: proc(cloth: ^Cloth, cursorSize: f32) {
+HandleMouseInteraction :: proc(cloth: ^Cloth, cursorSize: ^f32) {
+    if rl.GetMouseWheelMove() > 0 {
+        cursorSize^ += 5 
+    } else if rl.GetMouseWheelMove() < 0 && !(cursorSize^ <= 5) {
+        cursorSize^ -= 5
+    }
+    
     @(static) prevMousePos : rl.Vector2
+    
+    mousePos: rl.Vector2 = rl.GetMousePosition()
+    mouseDelta: rl.Vector2 = mousePos - prevMousePos
 
-    if rl.IsMouseButtonDown(.LEFT) {
-        mousePos: rl.Vector2 = rl.GetMousePosition()
-        mouseDelta: rl.Vector2 = mousePos - prevMousePos
+    mouseDelta = rl.Vector2Clamp(mouseDelta, {0,0}, {100,100})
 
-        mouseDelta = rl.Vector2Clamp(mouseDelta, {0,0}, {100,100})
+    for &point in cloth.points {
+        dist: f32 = rl.Vector2Distance(mousePos, point.pos)
+        if dist < cursorSize^ {
 
-        for &point in cloth.points {
-            dist: f32 = rl.Vector2Distance(mousePos, point.pos)
-            if dist < cursorSize {
+            if rl.IsMouseButtonDown(.LEFT) { 
                 point.prevPos = point.prevPos + mouseDelta
                 point.pos = point.pos + mouseDelta
             }
-        }
 
-        prevMousePos = mousePos
-    } else {
-        prevMousePos = rl.GetMousePosition()
+            point.isSelected = true
+        }
+        else {
+            point.isSelected = false
+        }
     }
+
+    prevMousePos = mousePos
 }
 
 main :: proc() {
@@ -165,7 +176,7 @@ main :: proc() {
     for !rl.WindowShouldClose() { 
         rl.BeginDrawing()
         rl.ClearBackground({33, 40, 48, 255})
-        HandleMouseInteraction(&cloth, cursorSize)
+        HandleMouseInteraction(&cloth, &cursorSize)
 
         accumulator += rl.GetFrameTime()
         for accumulator >= fixedDeltaTime {
