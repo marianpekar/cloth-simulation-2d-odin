@@ -51,7 +51,7 @@ SetupCloth :: proc(width, height, spacing, startX, startY: int) -> Cloth {
         }
     }
 
-    return cloth;
+    return cloth
 }
 
 UpdateCloth :: proc(cloth: ^Cloth, deltaTime: f32, spacing: int, drag: f32, acceleration: rl.Vector2, 
@@ -71,9 +71,6 @@ UpdateCloth :: proc(cloth: ^Cloth, deltaTime: f32, spacing: int, drag: f32, acce
         for stick in cloth.sticks {
             delta: rl.Vector2 = stick.p1.pos - stick.p0.pos
             dist: f32 = rl.Vector2Length(delta)
-            if dist == 0 {
-                continue
-            }
     
             if (dist > elasticity) {
                 stick.isActive = false
