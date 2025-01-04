@@ -53,7 +53,8 @@ SetupCloth :: proc(width, height, spacing, startX, startY: int) -> Cloth {
     return cloth;
 }
 
-UpdateCloth :: proc(cloth: ^Cloth, deltaTime: f32, spacing: int, drag: f32, acceleration: rl.Vector2, elasticity: f32) {
+UpdateCloth :: proc(cloth: ^Cloth, deltaTime: f32, spacing: int, drag: f32, acceleration: rl.Vector2, 
+    elasticity: f32, iterations: int, correctionFactor: f32) {
     for point in cloth.points {
         if point.isPinned {
             point.pos = point.initPos
@@ -65,27 +66,30 @@ UpdateCloth :: proc(cloth: ^Cloth, deltaTime: f32, spacing: int, drag: f32, acce
         point.pos += velocity * (1.0 - drag) + acceleration * deltaTime * deltaTime
     }
 
-    for stick in cloth.sticks {
-        delta: rl.Vector2 = stick.p1.pos - stick.p0.pos
-        dist: f32 = rl.Vector2Length(delta)
-        if dist == 0 {
-            continue
+    for i := 0; i < iterations; i += 1 {
+        for stick in cloth.sticks {
+            delta: rl.Vector2 = stick.p1.pos - stick.p0.pos
+            dist: f32 = rl.Vector2Length(delta)
+            if dist == 0 {
+                continue
+            }
+    
+            if (dist > elasticity) {
+                stick.isActive = false
+            }
+    
+            correction: rl.Vector2 = delta * ((dist - f32(spacing)) / dist * 0.5)
+            correction *= correctionFactor
+    
+            if !stick.p0.isPinned && stick.isActive {
+                stick.p0.pos += correction
+            }
+    
+            if !stick.p1.isPinned && stick.isActive  {
+                stick.p1.pos -= correction
+            }
         }
-
-        if (dist > elasticity) {
-            stick.isActive = false
-        }
-
-        correction: rl.Vector2 = delta * ((dist - f32(spacing)) / dist * 0.5)
-
-        if !stick.p0.isPinned && stick.isActive {
-            stick.p0.pos += correction
-        }
-
-        if !stick.p1.isPinned && stick.isActive  {
-            stick.p1.pos -= correction
-        }
-    }
+    } 
 }
 
 DrawCloth :: proc(cloth: ^Cloth, spacing: int, elasticity: f32) {
@@ -152,12 +156,23 @@ main :: proc() {
     acceleration: rl.Vector2 = {0, 980}
     elasticity: f32 = 80.0
     cursorSize: f32 = 30.0
+    iterations := 2
+    correctionFactor: f32 = 0.5
+
+    fixedDeltaTime: f32 = 1.0 / 300.0
+    accumulator: f32 = 0.0
 
     for !rl.WindowShouldClose() { 
         rl.BeginDrawing()
         rl.ClearBackground({33, 40, 48, 255})
         HandleMouseInteraction(&cloth, cursorSize)
-        UpdateCloth(&cloth, rl.GetFrameTime(), spacing, drag, acceleration, elasticity)
+
+        accumulator += rl.GetFrameTime()
+        for accumulator >= fixedDeltaTime {
+            UpdateCloth(&cloth, fixedDeltaTime, spacing, drag, acceleration, elasticity, iterations, correctionFactor)
+            accumulator -= fixedDeltaTime
+        }
+
         DrawCloth(&cloth, spacing, elasticity)
         rl.EndDrawing()
     }
