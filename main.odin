@@ -13,7 +13,7 @@ Point :: struct {
 Stick :: struct {
     p0: ^Point,
     p1: ^Point,
-    isActive: bool
+    isTeared: bool
 }
 
 Cloth :: struct {
@@ -21,11 +21,58 @@ Cloth :: struct {
     sticks: [dynamic]^Stick
 }
 
-SetupCloth :: proc(width, height, spacing, startX, startY: int) -> Cloth {
+main :: proc() {
+    rl.InitWindow(0, 0, "Cloth Simulation 2D")
+    rl.ToggleBorderlessWindowed()
+    screenWidth := rl.GetScreenWidth()
+    screenHeight := rl.GetScreenHeight()
+    rl.SetTargetFPS(300)
+
+    // Cloth
+    clothWidth :: 150
+    clothHeight :: 75
+    clothSpacing :: 10
+    startX := (screenWidth - (clothWidth * clothSpacing)) / 2
+    startY := screenHeight / 12
+    cloth := MakeCloth(clothWidth, clothHeight, clothSpacing, startX, startY)
+
+    // Physics
+    drag :: f32(0.005)
+    gravity :: rl.Vector2{0, 980}
+    elasticity :: f32(100.0)
+
+    // Update Loop
+    fixedDeltaTime :: f32(1.0 / 300)
+    accumulator: f32 = 0.0
+
+    // Interaction
+    cursorSize: f32 = 30.0
+    
+    for !rl.WindowShouldClose() { 
+        HandleMouseInteraction(&cloth, &cursorSize)
+
+        rl.BeginDrawing()
+        rl.ClearBackground({33, 40, 48, 255})
+
+        accumulator += rl.GetFrameTime()
+        for accumulator >= fixedDeltaTime {
+            UpdateCloth(&cloth, fixedDeltaTime, clothSpacing, drag, gravity, elasticity)
+            accumulator -= fixedDeltaTime
+        }
+
+        DrawCloth(&cloth, clothSpacing, elasticity)
+
+        rl.EndDrawing()
+    }
+
+    rl.CloseWindow()
+}
+
+MakeCloth :: proc(width, height, spacing, startX, startY: i32) -> Cloth {
     cloth: Cloth
 
-    for y := 0; y <= height; y += 1 {
-        for x := 0; x <= width; x += 1 {
+    for y := i32(0); y <= height; y += 1 {
+        for x := i32(0); x <= width; x += 1 {
             point := new(Point)
             point.initPos = { f32(startX + x * spacing), f32(startY + y * spacing) }
             point.pos = point.initPos
@@ -37,7 +84,6 @@ SetupCloth :: proc(width, height, spacing, startX, startY: int) -> Cloth {
                 stick := new(Stick)
                 stick.p0 = cloth.points[len(cloth.points) - 2]
                 stick.p1 = cloth.points[len(cloth.points) - 1]
-                stick.isActive = true
                 append(&cloth.sticks, stick)
             }
 
@@ -45,7 +91,6 @@ SetupCloth :: proc(width, height, spacing, startX, startY: int) -> Cloth {
                 stick := new(Stick)
                 stick.p0 = cloth.points[(y - 1) * (width + 1) + x]
                 stick.p1 = cloth.points[y * (width + 1) + x]
-                stick.isActive = true
                 append(&cloth.sticks, stick)
             }
         }
@@ -54,136 +99,130 @@ SetupCloth :: proc(width, height, spacing, startX, startY: int) -> Cloth {
     return cloth
 }
 
-UpdateCloth :: proc(cloth: ^Cloth, deltaTime: f32, spacing: int, drag: f32, acceleration: rl.Vector2, 
-    elasticity: f32, iterations: int, correctionFactor: f32) {
-    for point in cloth.points {
+UpdateCloth :: proc(cloth: ^Cloth, deltaTime: f32, spacing: i32, drag: f32, acceleration: rl.Vector2, elasticity: f32) {
+    for &point in cloth.points {
+        UpdatePoint(point, deltaTime, spacing, drag, acceleration)
+    }
+    
+    for &stick in cloth.sticks {
+        UpdateStick(stick, spacing, elasticity)
+    }
+    
+    UpdatePoint :: proc(point: ^Point, deltaTime: f32, spacing: i32, drag: f32, acceleration: rl.Vector2) {
         if point.isPinned {
             point.pos = point.initPos
-            continue
+            return
         }
-
-        velocity: rl.Vector2 = point.pos - point.prevPos
+    
+        velocity := point.pos - point.prevPos
         point.prevPos = point.pos
         point.pos += velocity * (1.0 - drag) + acceleration * deltaTime * deltaTime
     }
-
-    for i := 0; i < iterations; i += 1 {
-        for stick in cloth.sticks {
-            delta: rl.Vector2 = stick.p1.pos - stick.p0.pos
-            dist: f32 = rl.Vector2Length(delta)
     
-            if (dist > elasticity) {
-                stick.isActive = false
-            }
+    UpdateStick :: proc(stick: ^Stick, spacing: i32, elasticity: f32) {
+        delta := stick.p1.pos - stick.p0.pos
+        distance := rl.Vector2Length(delta)
     
-            correction: rl.Vector2 = delta * ((dist - f32(spacing)) / dist * 0.5)
-            correction *= correctionFactor
-    
-            if !stick.p0.isPinned && stick.isActive {
-                stick.p0.pos += correction
-            }
-    
-            if !stick.p1.isPinned && stick.isActive  {
-                stick.p1.pos -= correction
-            }
+        if distance > elasticity {
+            stick.isTeared = true
         }
-    } 
+    
+        correction: rl.Vector2 = delta * ((distance - f32(spacing)) / distance * 0.5) * 0.5
+    
+        if !stick.p0.isPinned && !stick.isTeared {
+            stick.p0.pos += correction
+        }
+    
+        if !stick.p1.isPinned && !stick.isTeared  {
+            stick.p1.pos -= correction
+        }
+    }
 }
 
 DrawCloth :: proc(cloth: ^Cloth, spacing: int, elasticity: f32) {
-    for stick in cloth.sticks {
-        if (stick.isActive) {
-            distance := rl.Vector2Distance(stick.p0.pos, stick.p1.pos)
-            color := stick.p0.isSelected || stick.p1.isSelected ? rl.BLUE : GetColor(distance, elasticity, spacing)
-            rl.DrawLineV(stick.p0.pos, stick.p1.pos, color)
-        }
+    for &stick in cloth.sticks {
+        DrawStick(stick, spacing, elasticity)
     }
 
-    GetColor :: proc(distance: f32, elasticity: f32, spacing: int) -> rl.Color {
-        if distance <= f32(spacing) {
-            return {44, 222, 130, 255}  // Green
-        } else if distance <= f32(spacing) * 1.33 {
-            t := (distance - f32(spacing)) / (f32(spacing) * 0.33)
-            return {Lerp(44, 255, t), Lerp(222, 255, t), Lerp(130, 0, t), 255}  // Gradual transition to yellow
-        } else {
-            t := (distance - f32(spacing) * 1.33) / (elasticity - f32(spacing) * 1.33)
-            return {Lerp(255, 222, t), Lerp(255, 44, t), Lerp(0, 44, t), 255}  // Gradual transition to red
+    DrawStick :: proc(stick: ^Stick, spacing: int, elasticity: f32) {
+        if (stick.isTeared) {
+            return
         }
+        
+        distance := rl.Vector2Distance(stick.p0.pos, stick.p1.pos)
+        color := stick.p0.isSelected || stick.p1.isSelected ? rl.BLUE : GetColorFromTension(distance, elasticity, spacing)
+        rl.DrawLineV(stick.p0.pos, stick.p1.pos, color)
+    }
+}
 
-        Lerp :: proc(a: f32, b: f32, t: f32) -> u8 {
-            return u8(a + ((b - a) * t))
-        }
+GetColorFromTension :: proc(distance: f32, elasticity: f32, spacing: int) -> rl.Color {
+    if distance <= f32(spacing) {
+        return {
+             44,
+            222,
+            130,
+            255
+        } // Green
+    } else if distance <= f32(spacing) * 1.33 {
+        t := (distance - f32(spacing)) / (f32(spacing) * 0.33)
+        return {
+            Lerp(44,  255, t),
+            Lerp(222, 255, t),
+            Lerp(130,   0, t),
+            255
+        } // Gradual transition to yellow
+    } else {
+        t := (distance - f32(spacing) * 1.33) / (elasticity - f32(spacing) * 1.33)
+        return {
+            Lerp(255, 222, t),
+            Lerp(255,  44, t),
+            Lerp(0,    44, t),
+            255
+        }  // Gradual transition to red
+    }
+
+    Lerp :: proc(a: f32, b: f32, t: f32) -> u8 {
+        return u8(a + ((b - a) * t))
     }
 }
 
 HandleMouseInteraction :: proc(cloth: ^Cloth, cursorSize: ^f32) {
-    if rl.GetMouseWheelMove() > 0 {
-        cursorSize^ += 5 
-    } else if rl.GetMouseWheelMove() < 0 && !(cursorSize^ <= 5) {
-        cursorSize^ -= 5
+    SetCursorSize(cursorSize)
+    InteractWithPoints(cloth, cursorSize)
+
+    SetCursorSize :: proc(cursorSize: ^f32) {
+        stepSize :: 5
+        if rl.GetMouseWheelMove() > 0 {
+            cursorSize^ += stepSize 
+        } else if rl.GetMouseWheelMove() < 0 && !(cursorSize^ <= stepSize) {
+            cursorSize^ -= stepSize
+        }
     }
+
+    InteractWithPoints :: proc(cloth: ^Cloth, cursorSize: ^f32) {
+        @(static)prevMousePos : rl.Vector2
     
-    @(static) prevMousePos : rl.Vector2
+        mousePos   := rl.GetMousePosition()
+        maxDelta   := rl.Vector2(100)
+        mouseDelta := rl.Vector2Clamp(mousePos - prevMousePos, rl.Vector2(0), maxDelta)
     
-    mousePos: rl.Vector2 = rl.GetMousePosition()
-    mouseDelta: rl.Vector2 = mousePos - prevMousePos
-
-    mouseDelta = rl.Vector2Clamp(mouseDelta, {0,0}, {100,100})
-
-    for &point in cloth.points {
-        dist: f32 = rl.Vector2Distance(mousePos, point.pos)
-        if dist < cursorSize^ {
-
-            if rl.IsMouseButtonDown(.LEFT) { 
-                point.prevPos = point.prevPos + mouseDelta
-                point.pos = point.pos + mouseDelta
+        for &point in cloth.points {
+            distance := rl.Vector2Distance(mousePos, point.pos)
+            if distance < cursorSize^ {
+    
+                if rl.IsMouseButtonDown(.LEFT) {
+                    // Drag selected points
+                    point.prevPos = point.prevPos + mouseDelta
+                    point.pos = point.pos + mouseDelta
+                }
+    
+                point.isSelected = true
             }
-
-            point.isSelected = true
+            else {
+                point.isSelected = false
+            }
         }
-        else {
-            point.isSelected = false
-        }
+    
+        prevMousePos = mousePos 
     }
-
-    prevMousePos = mousePos
-}
-
-main :: proc() {
-    rl.InitWindow(0, 0, "Cloth Simulation 2D")
-    rl.ToggleBorderlessWindowed()
-    screen_width := rl.GetScreenWidth()
-    screen_height := rl.GetScreenHeight()
-    rl.SetTargetFPS(300)
-
-    spacing := 10
-    width := 150
-    height := 75
-    cloth := SetupCloth(width, height, spacing, (int(screen_width) - (width * spacing)) / 2, 50)
-    drag: f32 = 0.005
-    acceleration: rl.Vector2 = {0, 980}
-    elasticity: f32 = 80.0
-    cursorSize: f32 = 30.0
-    iterations := 2
-    correctionFactor: f32 = 0.5
-
-    fixedDeltaTime: f32 = 1.0 / 300.0
-    accumulator: f32 = 0.0
-
-    for !rl.WindowShouldClose() { 
-        rl.BeginDrawing()
-        rl.ClearBackground({33, 40, 48, 255})
-        HandleMouseInteraction(&cloth, &cursorSize)
-
-        accumulator += rl.GetFrameTime()
-        for accumulator >= fixedDeltaTime {
-            UpdateCloth(&cloth, fixedDeltaTime, spacing, drag, acceleration, elasticity, iterations, correctionFactor)
-            accumulator -= fixedDeltaTime
-        }
-
-        DrawCloth(&cloth, spacing, elasticity)
-        rl.EndDrawing()
-    }
-
-    rl.CloseWindow()
 }
