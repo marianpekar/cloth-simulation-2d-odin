@@ -51,17 +51,15 @@ main :: proc() {
     for !rl.WindowShouldClose() { 
         HandleMouseInteraction(&cloth, &cursorSize)
 
-        rl.BeginDrawing()
-        rl.ClearBackground({33, 40, 48, 255})
-
         accumulator += rl.GetFrameTime()
         for accumulator >= fixedDeltaTime {
             UpdateCloth(&cloth, fixedDeltaTime, clothSpacing, drag, gravity, elasticity)
-            accumulator -= fixedDeltaTime
+            accumulator -= fixedDeltaTime            
         }
 
+        rl.BeginDrawing()
+        rl.ClearBackground({33, 40, 48, 255})
         DrawCloth(&cloth, clothSpacing, elasticity)
-
         rl.EndDrawing()
     }
 
