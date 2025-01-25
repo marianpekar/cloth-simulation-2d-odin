@@ -114,9 +114,9 @@ UpdateCloth :: proc(cloth: ^Cloth, deltaTime: f32, spacing: i32, drag: f32, acce
             return
         }
     
-        velocity := point.pos - point.prevPos
-        point.prevPos = point.pos
-        point.pos += velocity * (1.0 - drag) + acceleration * deltaTime * deltaTime
+        currentPos := point.pos
+        point.pos += (point.pos - point.prevPos) * (1.0 - drag) + acceleration * deltaTime * deltaTime
+        point.prevPos = currentPos
     }
     
     UpdateStick :: proc(stick: ^Stick, spacing: i32, elasticity: f32) {
