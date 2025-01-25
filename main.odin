@@ -26,7 +26,7 @@ main :: proc() {
     rl.ToggleBorderlessWindowed()
     screenWidth := rl.GetScreenWidth()
     screenHeight := rl.GetScreenHeight()
-    rl.SetTargetFPS(300)
+    rl.SetTargetFPS(60)
 
     // Cloth
     clothWidth :: 150
