@@ -123,6 +123,7 @@ UpdateCloth :: proc(cloth: ^Cloth, deltaTime: f32, spacing: i32, drag: f32, acce
     
         if distance > elasticity {
             stick.isTeared = true
+            return
         }
     
         correction: rl.Vector2 = delta * ((distance - f32(spacing)) / distance * 0.5) * 0.5
