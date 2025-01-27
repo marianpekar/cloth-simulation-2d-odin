@@ -34,7 +34,17 @@ main :: proc() {
     clothSpacing :: 10
     startX := (screenWidth - (clothWidth * clothSpacing)) / 2
     startY := screenHeight / 12
+
     cloth := MakeCloth(clothWidth, clothHeight, clothSpacing, startX, startY)
+    defer {
+        for &point in cloth.points {
+            free(point)
+        }
+        
+        for &stick in cloth.sticks {
+            free(stick)
+        }
+    }
 
     // Physics
     drag :: f32(0.005)
