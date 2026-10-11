@@ -1,6 +1,7 @@
 package main 
 
 import rl "vendor:raylib"
+import rlgl "vendor:raylib/rlgl"
 
 Point :: struct {
      pos: rl.Vector2,
@@ -28,9 +29,13 @@ main :: proc() {
     screenHeight := rl.GetScreenHeight()
     rl.SetTargetFPS(60)
 
+    // Render batch overflow fix
+    batch := rlgl.LoadRenderBatch(4, 1024 * 32)
+    rlgl.SetRenderBatchActive(&batch)
+
     // Cloth
     clothWidth :: 150
-    clothHeight :: 75
+    clothHeight :: 65
     clothSpacing :: 10
     startX := (screenWidth - (clothWidth * clothSpacing)) / 2
     startY := screenHeight / 12
