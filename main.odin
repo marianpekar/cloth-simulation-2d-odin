@@ -4,11 +4,11 @@ import rl "vendor:raylib"
 import rlgl "vendor:raylib/rlgl"
 
 Point :: struct {
-     pos: rl.Vector2,
-     prevPos: rl.Vector2,
-     initPos: rl.Vector2,
-     isPinned: bool,
-     isSelected: bool
+    pos: rl.Vector2,
+    prevPos: rl.Vector2,
+    initPos: rl.Vector2,
+    isPinned: bool,
+    isSelected: bool
 }
 
 Stick :: struct {
